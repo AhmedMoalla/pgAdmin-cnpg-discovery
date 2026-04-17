@@ -15,6 +15,9 @@ spec:
         app: pgadmin
     spec:
       serviceAccountName: pgadmin-cnpg-discovery
+      securityContext:
+        fsGroup: 5050
+        fsGroupChangePolicy: OnRootMismatch
       containers:
         - name: pgadmin
           image: dpage/pgadmin4:8.4
@@ -45,6 +48,7 @@ spec:
 
         - name: cnpg-discovery
           image: docker.io/ahmedmoalla/pgadmin-cnpg-discovery:latest
+          imagePullPolicy: Always
           envFrom:
             - secretRef:
                 name: pgadmin-credentials
@@ -70,6 +74,8 @@ spec:
               memory: 64Mi
           securityContext:
             runAsNonRoot: true
+            runAsUser: 5050
+            runAsGroup: 5050
             readOnlyRootFilesystem: true
             allowPrivilegeEscalation: false
             capabilities:

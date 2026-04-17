@@ -47,6 +47,8 @@ This deploys into the **default** namespace and creates:
 - A `Deployment` with pgAdmin and the cnpg-discovery sidecar
 - A `Service` exposing pgAdmin on port 80
 
+The sidecar is configured to run as numeric UID/GID `5050` so Kubernetes can validate `runAsNonRoot` and pgAdmin can read the shared `.pgpass` file written with mode `0600`.
+
 ### 3. Access pgAdmin
 
 ```bash

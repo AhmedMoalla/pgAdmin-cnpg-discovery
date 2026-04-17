@@ -10,6 +10,6 @@ FROM gcr.io/distroless/static:nonroot
 
 COPY --from=builder /pgadmin-cnpg-discovery /pgadmin-cnpg-discovery
 
-USER nonroot:nonroot
+USER 5050:5050
 
 ENTRYPOINT ["/pgadmin-cnpg-discovery"]
