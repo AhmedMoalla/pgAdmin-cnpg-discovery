@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -63,8 +64,9 @@ func (a *APIClient) Login() error {
 
 	// POST login credentials
 	form := url.Values{
-		"email":    {a.email},
-		"password": {a.password},
+		"email":      {a.email},
+		"password":   {a.password},
+		"csrf_token": {a.csrfToken},
 	}
 
 	req, err := http.NewRequest("POST", loginURL, strings.NewReader(form.Encode()))
@@ -81,11 +83,21 @@ func (a *APIClient) Login() error {
 	if err != nil {
 		return fmt.Errorf("posting login: %w", err)
 	}
+	body, _ = io.ReadAll(resp.Body)
 	resp.Body.Close()
 
 	// pgAdmin redirects on success (302) or returns 200 on the authenticated page
 	if resp.StatusCode >= 400 {
 		return fmt.Errorf("login failed with status %d", resp.StatusCode)
+	}
+
+	if token := extractCSRFToken(string(body)); token != "" {
+		a.csrfToken = token
+	}
+
+	// A 200 from /login can still mean login failed (e.g. bad/missing CSRF).
+	if strings.HasPrefix(resp.Request.URL.Path, "/login") {
+		return fmt.Errorf("login failed: stayed on login page")
 	}
 
 	// Refresh CSRF token from authenticated session
@@ -112,23 +124,19 @@ func (a *APIClient) refreshCSRFToken() {
 
 // extractCSRFToken finds the CSRF token from an HTML page body.
 func extractCSRFToken(body string) string {
-	// pgAdmin embeds CSRF token in a meta tag or hidden input
-	// <input id="csrf_token" name="csrf_token" type="hidden" value="...">
-	for _, marker := range []string{
-		`name="csrf_token" type="hidden" value="`,
-		`id="csrf_token"`,
-		`csrfToken" content="`,
-	} {
-		idx := strings.Index(body, marker)
-		if idx < 0 {
-			continue
-		}
-		start := idx + len(marker)
-		// find the closing quote
-		rest := body[start:]
-		end := strings.IndexByte(rest, '"')
-		if end > 0 {
-			return rest[:end]
+	// Supports hidden input and meta tag forms used by pgAdmin templates.
+	patterns := []string{
+		`<input[^>]*(?:id|name)="csrf_token"[^>]*value="([^"]+)"`,
+		`<input[^>]*value="([^"]+)"[^>]*(?:id|name)="csrf_token"`,
+		`<meta[^>]*name="csrfToken"[^>]*content="([^"]+)"`,
+		`<meta[^>]*name="csrf-token"[^>]*content="([^"]+)"`,
+	}
+
+	for _, p := range patterns {
+		re := regexp.MustCompile(p)
+		matches := re.FindStringSubmatch(body)
+		if len(matches) == 2 && matches[1] != "" {
+			return matches[1]
 		}
 	}
 	return ""

@@ -12,7 +12,7 @@ import (
 func TestNewAPIClient(t *testing.T) {
 	t.Run("creates client with provided credentials", func(t *testing.T) {
 		client := NewAPIClient("http://pgadmin.local", "admin@example.com", "password")
-		
+
 		if client.baseURL != "http://pgadmin.local" {
 			t.Errorf("baseURL = %q, want %q", client.baseURL, "http://pgadmin.local")
 		}
@@ -26,7 +26,7 @@ func TestNewAPIClient(t *testing.T) {
 
 	t.Run("removes trailing slash from baseURL", func(t *testing.T) {
 		client := NewAPIClient("http://pgadmin.local/", "admin@example.com", "password")
-		
+
 		if client.baseURL != "http://pgadmin.local" {
 			t.Errorf("baseURL = %q, want %q", client.baseURL, "http://pgadmin.local")
 		}
@@ -43,6 +43,11 @@ func TestExtractCSRFToken(t *testing.T) {
 			name: "csrf_token input field",
 			body: `<input id="csrf_token" name="csrf_token" type="hidden" value="abc123xyz">`,
 			want: "abc123xyz",
+		},
+		{
+			name: "csrf_token input with attributes reordered",
+			body: `<input value="reordered_token" type="hidden" name="csrf_token" id="csrf_token">`,
+			want: "reordered_token",
 		},
 		{
 			name: "csrfToken meta tag",
@@ -78,6 +83,7 @@ func TestExtractCSRFToken(t *testing.T) {
 
 func TestLogin(t *testing.T) {
 	t.Run("successful login", func(t *testing.T) {
+		csrfPosted := false
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if strings.Contains(r.URL.Path, "/login") && r.Method == "GET" {
 				w.Header().Set("Content-Type", "text/html")
@@ -85,8 +91,11 @@ func TestLogin(t *testing.T) {
 				return
 			}
 			if strings.Contains(r.URL.Path, "/login") && r.Method == "POST" {
+				if err := r.ParseForm(); err == nil && r.FormValue("csrf_token") == "test_token" {
+					csrfPosted = true
+				}
 				http.SetCookie(w, &http.Cookie{Name: "session", Value: "abc123"})
-				w.WriteHeader(http.StatusOK)
+				http.Redirect(w, r, "/browser/", http.StatusFound)
 				return
 			}
 			if strings.Contains(r.URL.Path, "/browser/") {
@@ -100,12 +109,15 @@ func TestLogin(t *testing.T) {
 
 		client := NewAPIClient(server.URL, "test@test.com", "password")
 		err := client.Login()
-		
+
 		if err != nil {
 			t.Fatalf("Login() error = %v", err)
 		}
 		if !client.loggedIn {
 			t.Errorf("loggedIn = false, want true")
+		}
+		if !csrfPosted {
+			t.Errorf("login POST missing expected csrf_token form field")
 		}
 	})
 
@@ -117,9 +129,37 @@ func TestLogin(t *testing.T) {
 
 		client := NewAPIClient(server.URL, "test@test.com", "password")
 		err := client.Login()
-		
+
 		if err == nil {
 			t.Errorf("Login() error = nil, want error")
+		}
+		if client.loggedIn {
+			t.Errorf("loggedIn = true, want false")
+		}
+	})
+
+	t.Run("login rejected when still on login page", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "/login") && r.Method == "GET" {
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, `<input name="csrf_token" type="hidden" value="test_token">`)
+				return
+			}
+			if strings.Contains(r.URL.Path, "/login") && r.Method == "POST" {
+				// Simulate pgAdmin returning login page again (auth failed).
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, `<input name="csrf_token" type="hidden" value="new_token">`)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+
+		client := NewAPIClient(server.URL, "test@test.com", "password")
+		err := client.Login()
+
+		if err == nil {
+			t.Fatalf("Login() error = nil, want error")
 		}
 		if client.loggedIn {
 			t.Errorf("loggedIn = true, want false")
@@ -140,7 +180,7 @@ func TestIsAvailable(t *testing.T) {
 
 		client := NewAPIClient(server.URL, "admin", "pass")
 		got := client.IsAvailable()
-		
+
 		if !got {
 			t.Errorf("IsAvailable() = false, want true")
 		}
@@ -154,7 +194,7 @@ func TestIsAvailable(t *testing.T) {
 
 		client := NewAPIClient(server.URL, "admin", "pass")
 		got := client.IsAvailable()
-		
+
 		if got {
 			t.Errorf("IsAvailable() = true, want false")
 		}
@@ -163,7 +203,7 @@ func TestIsAvailable(t *testing.T) {
 	t.Run("pgadmin unreachable", func(t *testing.T) {
 		client := NewAPIClient("http://unreachable.local.invalid:99999", "admin", "pass")
 		got := client.IsAvailable()
-		
+
 		if got {
 			t.Errorf("IsAvailable() = true, want false")
 		}
@@ -341,7 +381,7 @@ func TestCreateServer(t *testing.T) {
 
 		entry := ServerEntry{Name: "test"}
 		err := client.CreateServer(1, entry)
-		
+
 		if err == nil {
 			t.Errorf("CreateServer() error = nil, want error")
 		}
