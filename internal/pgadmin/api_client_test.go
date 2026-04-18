@@ -121,6 +121,45 @@ func TestLogin(t *testing.T) {
 		}
 	})
 
+	t.Run("successful login with csrf token from cookie", func(t *testing.T) {
+		csrfPosted := false
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.Contains(r.URL.Path, "/login") && r.Method == "GET" {
+				http.SetCookie(w, &http.Cookie{Name: "csrf_token", Value: "cookie_token"})
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, `<html><body>login</body></html>`)
+				return
+			}
+			if strings.Contains(r.URL.Path, "/login") && r.Method == "POST" {
+				if err := r.ParseForm(); err == nil && r.FormValue("csrf_token") == "cookie_token" {
+					csrfPosted = true
+				}
+				http.Redirect(w, r, "/browser/", http.StatusFound)
+				return
+			}
+			if strings.Contains(r.URL.Path, "/browser/") {
+				w.Header().Set("Content-Type", "text/html")
+				fmt.Fprint(w, `<input name="csrf_token" type="hidden" value="refreshed_token">`)
+				return
+			}
+			w.WriteHeader(http.StatusNotFound)
+		}))
+		defer server.Close()
+
+		client := NewAPIClient(server.URL, "test@test.com", "password")
+		err := client.Login()
+
+		if err != nil {
+			t.Fatalf("Login() error = %v", err)
+		}
+		if !client.loggedIn {
+			t.Errorf("loggedIn = false, want true")
+		}
+		if !csrfPosted {
+			t.Errorf("login POST missing csrf token from cookie fallback")
+		}
+	})
+
 	t.Run("login failure", func(t *testing.T) {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusUnauthorized)

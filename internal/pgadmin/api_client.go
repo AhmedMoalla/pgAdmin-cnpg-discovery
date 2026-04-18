@@ -57,10 +57,14 @@ func (a *APIClient) Login() error {
 		return fmt.Errorf("getting login page: %w", err)
 	}
 	body, _ := io.ReadAll(resp.Body)
+	loginCookies := resp.Cookies()
 	resp.Body.Close()
 
-	// Extract CSRF token from the page or cookies
+	// Extract CSRF token from the page first, then cookies as fallback.
 	a.csrfToken = extractCSRFToken(string(body))
+	if a.csrfToken == "" {
+		a.csrfToken = extractCSRFFromCookies(loginCookies)
+	}
 
 	// POST login credentials
 	form := url.Values{
@@ -106,6 +110,20 @@ func (a *APIClient) Login() error {
 	a.loggedIn = true
 	slog.Info("logged into pgAdmin API")
 	return nil
+}
+
+func extractCSRFFromCookies(cookies []*http.Cookie) string {
+	for _, c := range cookies {
+		if isCSRFCookie(c.Name) && c.Value != "" {
+			return c.Value
+		}
+	}
+	return ""
+}
+
+func isCSRFCookie(name string) bool {
+	normalized := strings.ToLower(name)
+	return normalized == "csrf_token" || normalized == "csrftoken"
 }
 
 // refreshCSRFToken fetches a page after login to extract the up-to-date CSRF token.
