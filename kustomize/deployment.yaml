@@ -32,7 +32,7 @@ spec:
               value: /shared/servers.json
             - name: PGADMIN_REPLACE_SERVERS_ON_STARTUP
               value: "True"
-            - name: PGPASSFILE
+            - name: PGPASS_FILE
               value: /shared/.pgpass
           volumeMounts:
             - name: shared
