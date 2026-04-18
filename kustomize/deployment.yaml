@@ -85,4 +85,5 @@ spec:
         - name: shared
           emptyDir: {}
         - name: pgadmin-data
-          emptyDir: {}
+          persistentVolumeClaim:
+            claimName: pgadmin-data
