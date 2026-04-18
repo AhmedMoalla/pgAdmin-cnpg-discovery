@@ -90,7 +90,7 @@ func TestLogin(t *testing.T) {
 				fmt.Fprint(w, `<input name="csrf_token" type="hidden" value="test_token">`)
 				return
 			}
-			if strings.Contains(r.URL.Path, "/login") && r.Method == "POST" {
+			if strings.Contains(r.URL.Path, "/authenticate/login") && r.Method == "POST" {
 				if err := r.ParseForm(); err == nil && r.FormValue("csrf_token") == "test_token" {
 					csrfPosted = true
 				}
@@ -130,7 +130,7 @@ func TestLogin(t *testing.T) {
 				fmt.Fprint(w, `<html><body>login</body></html>`)
 				return
 			}
-			if strings.Contains(r.URL.Path, "/login") && r.Method == "POST" {
+			if strings.Contains(r.URL.Path, "/authenticate/login") && r.Method == "POST" {
 				if err := r.ParseForm(); err == nil && r.FormValue("csrf_token") == "cookie_token" {
 					csrfPosted = true
 				}
@@ -184,7 +184,7 @@ func TestLogin(t *testing.T) {
 				fmt.Fprint(w, `<input name="csrf_token" type="hidden" value="test_token">`)
 				return
 			}
-			if strings.Contains(r.URL.Path, "/login") && r.Method == "POST" {
+			if strings.Contains(r.URL.Path, "/authenticate/login") && r.Method == "POST" {
 				// Simulate pgAdmin returning login page again (auth failed).
 				w.Header().Set("Content-Type", "text/html")
 				fmt.Fprint(w, `<input name="csrf_token" type="hidden" value="new_token">`)

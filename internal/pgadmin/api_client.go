@@ -51,8 +51,9 @@ func NewAPIClient(baseURL, email, password string) *APIClient {
 // Login authenticates with pgAdmin and stores the session cookie and CSRF token.
 func (a *APIClient) Login() error {
 	// First, GET the login page to obtain the CSRF token
-	loginURL := a.baseURL + "/login"
-	resp, err := a.client.Get(loginURL)
+	loginPageURL := a.baseURL + "/login"
+	authenticateURL := a.baseURL + "/authenticate/login"
+	resp, err := a.client.Get(loginPageURL)
 	if err != nil {
 		return fmt.Errorf("getting login page: %w", err)
 	}
@@ -73,7 +74,7 @@ func (a *APIClient) Login() error {
 		"csrf_token": {a.csrfToken},
 	}
 
-	req, err := http.NewRequest("POST", loginURL, strings.NewReader(form.Encode()))
+	req, err := http.NewRequest("POST", authenticateURL, strings.NewReader(form.Encode()))
 	if err != nil {
 		return fmt.Errorf("creating login request: %w", err)
 	}
@@ -99,8 +100,8 @@ func (a *APIClient) Login() error {
 		a.csrfToken = token
 	}
 
-	// A 200 from /login can still mean login failed (e.g. bad/missing CSRF).
-	if strings.HasPrefix(resp.Request.URL.Path, "/login") {
+	// A 200 from login/authenticate endpoints can still mean login failed.
+	if strings.HasPrefix(resp.Request.URL.Path, "/login") || strings.HasPrefix(resp.Request.URL.Path, "/authenticate/login") {
 		return fmt.Errorf("login failed: stayed on login page")
 	}
 
