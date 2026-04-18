@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	"github.com/AhmedMoalla/pgadmin-cnpg-discovery/internal/config"
 	"github.com/AhmedMoalla/pgadmin-cnpg-discovery/internal/discovery"
 	"github.com/AhmedMoalla/pgadmin-cnpg-discovery/internal/pgadmin"
@@ -75,9 +77,13 @@ func (r *Reconciler) reconcile(ctx context.Context) {
 
 	slog.Info("discovered clusters", "count", len(clusters))
 
+	wasAlreadyApplied := r.hasAppliedConfig
 	if r.writeFiles(clusters) {
 		r.lastAppliedConfigHash = configHash
 		r.hasAppliedConfig = true
+		if wasAlreadyApplied {
+			r.restartPod(ctx)
+		}
 	}
 }
 
@@ -100,6 +106,22 @@ func (r *Reconciler) writeFiles(clusters []discovery.ClusterInfo) bool {
 	}
 
 	return success
+}
+
+// restartPod deletes the sidecar's own pod, causing Kubernetes to restart both
+// the sidecar and the pgAdmin container so pgAdmin re-reads servers.json.
+func (r *Reconciler) restartPod(ctx context.Context) {
+	if r.cfg.PodName == "" || r.cfg.PodNamespace == "" {
+		slog.Warn("skipping pod restart: POD_NAME or POD_NAMESPACE not configured")
+		return
+	}
+	slog.Info("restarting pod to reload pgAdmin servers.json",
+		"pod", r.cfg.PodName, "namespace", r.cfg.PodNamespace)
+	err := r.discoverer.Clientset().CoreV1().Pods(r.cfg.PodNamespace).Delete(
+		ctx, r.cfg.PodName, metav1.DeleteOptions{})
+	if err != nil {
+		slog.Error("failed to delete pod for restart", "pod", r.cfg.PodName, "error", err)
+	}
 }
 
 func (r *Reconciler) configHash(clusters []discovery.ClusterInfo) (string, error) {

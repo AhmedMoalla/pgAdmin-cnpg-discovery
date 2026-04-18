@@ -58,6 +58,11 @@ func NewFromClients(dynClient dynamic.Interface, clientset kubernetes.Interface,
 	}
 }
 
+// Clientset returns the underlying Kubernetes clientset.
+func (d *Discoverer) Clientset() kubernetes.Interface {
+	return d.clientset
+}
+
 // DiscoverClusters lists all CNPG clusters and reads their superuser secrets.
 func (d *Discoverer) DiscoverClusters(ctx context.Context) ([]ClusterInfo, error) {
 	list, err := d.dynamicClient.Resource(cnpgClusterGVR).Namespace(d.namespace).List(ctx, metav1.ListOptions{})
@@ -119,7 +124,7 @@ func (d *Discoverer) readClusterSecret(ctx context.Context, clusterName, namespa
 			info.Database = "postgres"
 		}
 
-		slog.Info("discovered cluster", "cluster", clusterName, "namespace", namespace, "secret", secretName)
+		slog.Debug("discovered cluster", "cluster", clusterName, "namespace", namespace, "secret", secretName)
 		return info, nil
 	}
 

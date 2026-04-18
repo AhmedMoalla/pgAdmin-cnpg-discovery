@@ -459,3 +459,160 @@ func isValidJSON(b []byte) bool {
 	var tmp interface{}
 	return nil == json.Unmarshal(b, &tmp)
 }
+
+func TestReconcile_RestartsPodOnConfigChange(t *testing.T) {
+	t.Run("deletes pod when configuration changes after initial load", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			PollInterval:    30 * time.Second,
+			ServersJSONPath: tmpDir + "/servers.json",
+			PgpassPath:      tmpDir + "/.pgpass",
+			ServerGroupName: "CNPG",
+			Namespace:       "",
+			PodName:         "pgadmin-pod",
+			PodNamespace:    "default",
+		}
+
+		scheme := runtime.NewScheme()
+		scheme.AddKnownTypeWithName(
+			schema.GroupVersionKind{Group: "postgresql.cnpg.io", Version: "v1", Kind: "ClusterList"},
+			&unstructured.UnstructuredList{},
+		)
+
+		clusters := []*unstructured.Unstructured{
+			createFakeCNPGCluster("cluster-a", "default"),
+		}
+		secrets := []*v1.Secret{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-a-superuser",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"host":     []byte("localhost"),
+					"port":     []byte("5432"),
+					"username": []byte("postgres"),
+					"password": []byte("password"),
+					"dbname":   []byte("postgres"),
+				},
+			},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-b-superuser",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"host":     []byte("host-b"),
+					"port":     []byte("5432"),
+					"username": []byte("postgres"),
+					"password": []byte("password"),
+					"dbname":   []byte("postgres"),
+				},
+			},
+		}
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pgadmin-pod",
+				Namespace: "default",
+			},
+		}
+
+		dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
+			{Group: "postgresql.cnpg.io", Version: "v1", Resource: "clusters"}: "ClusterList",
+		}, toRuntimeObjectSlice(clusters)...)
+		clientsetFake := fakeClientset.NewSimpleClientset(append(toRuntimeObjectSecretsSlice(secrets), pod)...)
+
+		disc := discovery.NewFromClients(dynFake, clientsetFake, "")
+		rec := New(cfg, disc)
+
+		// First reconcile: initial load — pod must NOT be deleted
+		rec.reconcile(context.Background())
+
+		_, err := clientsetFake.CoreV1().Pods("default").Get(context.Background(), "pgadmin-pod", metav1.GetOptions{})
+		if err != nil {
+			t.Fatalf("pod should not be deleted on initial load: %v", err)
+		}
+
+		// Add a second cluster to trigger a config change
+		clusterB := createFakeCNPGCluster("cluster-b", "default")
+		if _, err := dynFake.Resource(schema.GroupVersionResource{
+			Group: "postgresql.cnpg.io", Version: "v1", Resource: "clusters",
+		}).Namespace("default").Create(context.Background(), clusterB, metav1.CreateOptions{}); err != nil {
+			t.Fatalf("failed to add cluster-b: %v", err)
+		}
+
+		// Second reconcile: config changed — pod must be deleted
+		rec.reconcile(context.Background())
+
+		_, err = clientsetFake.CoreV1().Pods("default").Get(context.Background(), "pgadmin-pod", metav1.GetOptions{})
+		if err == nil {
+			t.Errorf("pod should have been deleted after config change")
+		}
+	})
+
+	t.Run("does not delete pod when POD_NAME is not configured", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			PollInterval:    30 * time.Second,
+			ServersJSONPath: tmpDir + "/servers.json",
+			PgpassPath:      tmpDir + "/.pgpass",
+			ServerGroupName: "CNPG",
+			Namespace:       "",
+			PodName:         "", // not configured
+			PodNamespace:    "default",
+		}
+
+		scheme := runtime.NewScheme()
+		scheme.AddKnownTypeWithName(
+			schema.GroupVersionKind{Group: "postgresql.cnpg.io", Version: "v1", Kind: "ClusterList"},
+			&unstructured.UnstructuredList{},
+		)
+
+		clusters := []*unstructured.Unstructured{
+			createFakeCNPGCluster("cluster-a", "default"),
+		}
+		secrets := []*v1.Secret{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-a-superuser",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"host":     []byte("localhost"),
+					"port":     []byte("5432"),
+					"username": []byte("postgres"),
+					"password": []byte("password"),
+					"dbname":   []byte("postgres"),
+				},
+			},
+		}
+		pod := &v1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pgadmin-pod",
+				Namespace: "default",
+			},
+		}
+
+		dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
+			{Group: "postgresql.cnpg.io", Version: "v1", Resource: "clusters"}: "ClusterList",
+		}, toRuntimeObjectSlice(clusters)...)
+		clientsetFake := fakeClientset.NewSimpleClientset(append(toRuntimeObjectSecretsSlice(secrets), pod)...)
+
+		disc := discovery.NewFromClients(dynFake, clientsetFake, "")
+		rec := New(cfg, disc)
+
+		// Simulate that initial config was already applied
+		rec.hasAppliedConfig = true
+		rec.lastAppliedConfigHash = "old-hash"
+
+		rec.reconcile(context.Background())
+
+		// Pod must NOT be deleted because PodName is empty
+		_, err := clientsetFake.CoreV1().Pods("default").Get(context.Background(), "pgadmin-pod", metav1.GetOptions{})
+		if err != nil {
+			t.Errorf("pod should not be deleted when POD_NAME is not configured: %v", err)
+		}
+	})
+}

@@ -12,6 +12,8 @@ type Config struct {
 	PgpassPath      string
 	ServerGroupName string
 	Namespace       string // empty = all namespaces
+	PodName         string // set via POD_NAME downward API env var
+	PodNamespace    string // set via POD_NAMESPACE downward API env var
 }
 
 func Load() (*Config, error) {
@@ -27,6 +29,8 @@ func Load() (*Config, error) {
 		PgpassPath:      getEnv("PGPASS_PATH", "/shared/.pgpass"),
 		ServerGroupName: getEnv("SERVER_GROUP_NAME", "CNPG Clusters"),
 		Namespace:       os.Getenv("NAMESPACE"),
+		PodName:         getEnv("POD_NAME", os.Getenv("HOSTNAME")),
+		PodNamespace:    os.Getenv("POD_NAMESPACE"),
 	}, nil
 }
 
