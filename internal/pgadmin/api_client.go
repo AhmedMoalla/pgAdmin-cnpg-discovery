@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+const browserPath = "/browser/"
+
 // APIClient communicates with pgAdmin's internal REST API.
 type APIClient struct {
 	baseURL   string
@@ -51,8 +53,8 @@ func NewAPIClient(baseURL, email, password string) *APIClient {
 // Login authenticates with pgAdmin and stores the session cookie and CSRF token.
 func (a *APIClient) Login() error {
 	// First, GET the login page to obtain the CSRF token
-	loginPageURL := a.baseURL + "/login"
-	authenticateURL := a.baseURL + "/authenticate/login"
+	loginPageURL := a.baseURL + "/login?next=%2Fbrowser%2F"
+	authenticateURL := a.baseURL + "/authenticate/login?next=%2Fbrowser%2F"
 	resp, err := a.client.Get(loginPageURL)
 	if err != nil {
 		return fmt.Errorf("getting login page: %w", err)
@@ -72,6 +74,7 @@ func (a *APIClient) Login() error {
 		"email":      {a.email},
 		"password":   {a.password},
 		"csrf_token": {a.csrfToken},
+		"next":       {browserPath},
 	}
 
 	req, err := http.NewRequest("POST", authenticateURL, strings.NewReader(form.Encode()))
@@ -79,6 +82,7 @@ func (a *APIClient) Login() error {
 		return fmt.Errorf("creating login request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Referer", loginPageURL)
 	if a.csrfToken != "" {
 		req.Header.Set("X-CSRFToken", a.csrfToken)
 		req.Header.Set("X-pgA-CSRFToken", a.csrfToken)
@@ -100,16 +104,36 @@ func (a *APIClient) Login() error {
 		a.csrfToken = token
 	}
 
-	// A 200 from login/authenticate endpoints can still mean login failed.
-	if strings.HasPrefix(resp.Request.URL.Path, "/login") || strings.HasPrefix(resp.Request.URL.Path, "/authenticate/login") {
-		return fmt.Errorf("login failed: stayed on login page")
+	if err := a.verifyAuthenticatedSession(); err != nil {
+		return err
 	}
-
-	// Refresh CSRF token from authenticated session
-	a.refreshCSRFToken()
 
 	a.loggedIn = true
 	slog.Info("logged into pgAdmin API")
+	return nil
+}
+
+// verifyAuthenticatedSession confirms we can access a page that requires authentication.
+func (a *APIClient) verifyAuthenticatedSession() error {
+	resp, err := a.client.Get(a.baseURL + browserPath)
+	if err != nil {
+		return fmt.Errorf("verifying authenticated session: %w", err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("verifying authenticated session: status %d", resp.StatusCode)
+	}
+
+	if strings.HasPrefix(resp.Request.URL.Path, "/login") || strings.HasPrefix(resp.Request.URL.Path, "/authenticate/login") {
+		return fmt.Errorf("login failed: stayed on login page (path=%s)", resp.Request.URL.Path)
+	}
+
+	if token := extractCSRFToken(string(body)); token != "" {
+		a.csrfToken = token
+	}
+
 	return nil
 }
 
@@ -129,7 +153,7 @@ func isCSRFCookie(name string) bool {
 
 // refreshCSRFToken fetches a page after login to extract the up-to-date CSRF token.
 func (a *APIClient) refreshCSRFToken() {
-	resp, err := a.client.Get(a.baseURL + "/browser/")
+	resp, err := a.client.Get(a.baseURL + browserPath)
 	if err != nil {
 		return
 	}
