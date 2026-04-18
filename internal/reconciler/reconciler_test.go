@@ -376,6 +376,84 @@ func TestWriteFiles_EmptyClusters(t *testing.T) {
 	})
 }
 
+func TestReconcile_UnchangedConfigurationSkipsRewrite(t *testing.T) {
+	t.Run("does not rewrite files when discovered configuration is unchanged", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			PollInterval:    30 * time.Second,
+			ServersJSONPath: tmpDir + "/servers.json",
+			PgpassPath:      tmpDir + "/.pgpass",
+			ServerGroupName: "CNPG",
+			Namespace:       "",
+		}
+
+		scheme := runtime.NewScheme()
+		scheme.AddKnownTypeWithName(
+			schema.GroupVersionKind{Group: "postgresql.cnpg.io", Version: "v1", Kind: "ClusterList"},
+			&unstructured.UnstructuredList{},
+		)
+
+		clusters := []*unstructured.Unstructured{
+			createFakeCNPGCluster("stable-cluster", "default"),
+		}
+		secrets := []*v1.Secret{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "stable-cluster-superuser",
+					Namespace: "default",
+				},
+				Data: map[string][]byte{
+					"host":     []byte("localhost"),
+					"port":     []byte("5432"),
+					"username": []byte("postgres"),
+					"password": []byte("password"),
+					"dbname":   []byte("postgres"),
+				},
+			},
+		}
+
+		dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
+			{Group: "postgresql.cnpg.io", Version: "v1", Resource: "clusters"}: "ClusterList",
+		}, toRuntimeObjectSlice(clusters)...)
+		clientsetFake := fakeClientset.NewSimpleClientset(toRuntimeObjectSecretsSlice(secrets)...)
+
+		disc := discovery.NewFromClients(dynFake, clientsetFake, "")
+		rec := New(cfg, disc)
+
+		rec.reconcile(context.Background())
+
+		serversInfoBefore, err := os.Stat(cfg.ServersJSONPath)
+		if err != nil {
+			t.Fatalf("servers.json should exist after first reconcile: %v", err)
+		}
+		pgpassInfoBefore, err := os.Stat(cfg.PgpassPath)
+		if err != nil {
+			t.Fatalf(".pgpass should exist after first reconcile: %v", err)
+		}
+
+		time.Sleep(20 * time.Millisecond)
+
+		rec.reconcile(context.Background())
+
+		serversInfoAfter, err := os.Stat(cfg.ServersJSONPath)
+		if err != nil {
+			t.Fatalf("servers.json should exist after second reconcile: %v", err)
+		}
+		pgpassInfoAfter, err := os.Stat(cfg.PgpassPath)
+		if err != nil {
+			t.Fatalf(".pgpass should exist after second reconcile: %v", err)
+		}
+
+		if !serversInfoAfter.ModTime().Equal(serversInfoBefore.ModTime()) {
+			t.Errorf("servers.json was rewritten for unchanged configuration")
+		}
+		if !pgpassInfoAfter.ModTime().Equal(pgpassInfoBefore.ModTime()) {
+			t.Errorf(".pgpass was rewritten for unchanged configuration")
+		}
+	})
+}
+
 // Helper function
 func isValidJSON(b []byte) bool {
 	var tmp interface{}

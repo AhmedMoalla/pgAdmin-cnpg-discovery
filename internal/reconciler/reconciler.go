@@ -2,6 +2,9 @@ package reconciler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"time"
@@ -15,6 +18,9 @@ import (
 type Reconciler struct {
 	cfg        *config.Config
 	discoverer *discovery.Discoverer
+
+	lastAppliedConfigHash string
+	hasAppliedConfig      bool
 }
 
 // New creates a new Reconciler.
@@ -55,24 +61,63 @@ func (r *Reconciler) reconcile(ctx context.Context) {
 		slog.Error("failed to discover clusters", "error", err)
 		return
 	}
+
+	configHash, err := r.configHash(clusters)
+	if err != nil {
+		slog.Error("failed to hash discovered configuration", "error", err)
+		return
+	}
+
+	if r.hasAppliedConfig && configHash == r.lastAppliedConfigHash {
+		slog.Debug("configuration unchanged; skipping update", "count", len(clusters))
+		return
+	}
+
 	slog.Info("discovered clusters", "count", len(clusters))
 
-	r.writeFiles(clusters)
+	if r.writeFiles(clusters) {
+		r.lastAppliedConfigHash = configHash
+		r.hasAppliedConfig = true
+	}
 }
 
 // writeFiles writes servers.json and .pgpass to the shared volume.
-func (r *Reconciler) writeFiles(clusters []discovery.ClusterInfo) {
+func (r *Reconciler) writeFiles(clusters []discovery.ClusterInfo) bool {
+	success := true
+
 	if err := pgadmin.WriteServersJSON(r.cfg.ServersJSONPath, clusters, r.cfg.ServerGroupName); err != nil {
 		slog.Error("failed to write servers.json", "path", r.cfg.ServersJSONPath, "error", err)
+		success = false
 	} else {
 		slog.Debug("wrote servers.json", "path", r.cfg.ServersJSONPath, "servers", len(clusters))
 	}
 
 	if err := pgadmin.WritePgpass(r.cfg.PgpassPath, clusters); err != nil {
 		slog.Error("failed to write .pgpass", "path", r.cfg.PgpassPath, "error", err)
+		success = false
 	} else {
 		slog.Debug("wrote .pgpass", "path", r.cfg.PgpassPath, "entries", len(clusters))
 	}
+
+	return success
+}
+
+func (r *Reconciler) configHash(clusters []discovery.ClusterInfo) (string, error) {
+	payload := struct {
+		ServerGroupName string                  `json:"server_group_name"`
+		Clusters        []discovery.ClusterInfo `json:"clusters"`
+	}{
+		ServerGroupName: r.cfg.ServerGroupName,
+		Clusters:        pgadmin.SortClusters(clusters),
+	}
+
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return "", fmt.Errorf("marshaling configuration payload: %w", err)
+	}
+
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 // ReconcileOnce runs a single reconciliation cycle (useful for testing).
