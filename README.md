@@ -3,7 +3,7 @@
 ![Tests](https://github.com/AhmedMoalla/pgadmin-cnpg-discovery/actions/workflows/test.yml/badge.svg)
 ![Coverage](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/AhmedMoalla/1273b85033b31d41f9db050263558f5f/raw/coverage.json)
 
-A Kubernetes sidecar that automatically discovers [CloudNativePG](https://cloudnative-pg.io/) (CNPG) clusters and registers them in [pgAdmin](https://www.pgadmin.org/).
+A Kubernetes sidecar that automatically discovers [CloudNativePG](https://cloudnative-pg.io/) (CNPG) clusters and writes pgAdmin-compatible `servers.json` and `.pgpass` files.
 
 ## How It Works
 
@@ -12,9 +12,8 @@ The sidecar runs alongside pgAdmin in the same pod. On a configurable interval i
 1. Lists all CNPG `Cluster` resources across all namespaces (or a specific one)
 2. Reads each cluster's `-superuser` secret (falls back to `-app` secret) to get connection details
 3. Writes `servers.json` and `.pgpass` to a shared volume so pgAdmin picks them up on startup
-4. Syncs with pgAdmin's REST API to add/remove servers live without requiring a restart
 
-Servers created by the sidecar are tagged with a `"Managed by cnpg-discovery"` comment so manually-added servers are never touched.
+Generated server entries are tagged with a `"Managed by cnpg-discovery"` comment in `servers.json`.
 
 ## Prerequisites
 
@@ -26,7 +25,7 @@ Servers created by the sidecar are tagged with a `"Managed by cnpg-discovery"` c
 
 ### 1. Create the pgAdmin credentials secret
 
-The deployment expects a secret named `pgadmin-credentials` in the target namespace with your pgAdmin login credentials. **You must create this before deploying.**
+The deployment expects a secret named `pgadmin-credentials` in the target namespace with your pgAdmin login credentials. pgAdmin itself requires this secret to initialize and start. **You must create this before deploying.**
 
 ```bash
 kubectl create secret generic pgadmin-credentials \
@@ -55,7 +54,7 @@ The sidecar is configured to run as numeric UID/GID `5050` so Kubernetes can val
 kubectl port-forward svc/pgadmin 8080:80
 ```
 
-Open [http://localhost:8080](http://localhost:8080) and log in with the credentials you set in the secret. Your CNPG clusters will appear automatically under the **CNPG Clusters** server group.
+Open [http://localhost:8080](http://localhost:8080) and log in with the credentials you set in the secret. Your CNPG clusters will be loaded from `servers.json` when pgAdmin starts under the **CNPG Clusters** server group.
 
 ## Deploy with FluxCD
 
@@ -110,12 +109,9 @@ The sidecar is configured via environment variables. These can be adjusted in `k
 
 | Variable | Default | Description |
 |---|---|---|
-| `PGADMIN_DEFAULT_EMAIL` | *(required)* | pgAdmin login email (from secret) |
-| `PGADMIN_DEFAULT_PASSWORD` | *(required)* | pgAdmin login password (from secret) |
 | `POLL_INTERVAL` | `30s` | How often to poll for CNPG clusters |
 | `SERVERS_JSON_PATH` | `/shared/servers.json` | Path to write servers.json |
 | `PGPASS_PATH` | `/shared/.pgpass` | Path to write .pgpass |
-| `PGADMIN_URL` | `http://localhost:80` | pgAdmin URL (within the pod) |
 | `SERVER_GROUP_NAME` | `CNPG Clusters` | Server group name in pgAdmin |
 | `NAMESPACE` | *(empty = all)* | Restrict discovery to a namespace |
 | `LOG_LEVEL` | `info` | Log level: `debug`, `info`, `warn`, `error` |

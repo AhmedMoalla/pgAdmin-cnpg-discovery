@@ -49,16 +49,11 @@ spec:
         - name: cnpg-discovery
           image: docker.io/ahmedmoalla/pgadmin-cnpg-discovery:latest
           imagePullPolicy: Always
-          envFrom:
-            - secretRef:
-                name: pgadmin-credentials
           env:
             - name: SERVERS_JSON_PATH
               value: /shared/servers.json
             - name: PGPASS_PATH
               value: /shared/.pgpass
-            - name: PGADMIN_URL
-              value: http://localhost:80
             - name: POLL_INTERVAL
               value: "30s"
             - name: LOG_LEVEL

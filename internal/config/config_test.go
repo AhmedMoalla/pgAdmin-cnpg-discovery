@@ -13,18 +13,12 @@ func TestLoad(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "minimal required vars",
-			env: map[string]string{
-				"PGADMIN_DEFAULT_EMAIL":    "admin@example.com",
-				"PGADMIN_DEFAULT_PASSWORD": "password",
-			},
+			name: "defaults",
+			env:  map[string]string{},
 			want: &Config{
 				PollInterval:    30 * time.Second,
 				ServersJSONPath: "/shared/servers.json",
 				PgpassPath:      "/shared/.pgpass",
-				PgAdminURL:      "http://localhost:80",
-				PgAdminEmail:    "admin@example.com",
-				PgAdminPassword: "password",
 				ServerGroupName: "CNPG Clusters",
 				Namespace:       "",
 			},
@@ -33,47 +27,25 @@ func TestLoad(t *testing.T) {
 		{
 			name: "all vars customized",
 			env: map[string]string{
-				"PGADMIN_DEFAULT_EMAIL":    "custom@test.com",
-				"PGADMIN_DEFAULT_PASSWORD": "secure",
-				"POLL_INTERVAL":            "1m",
-				"SERVERS_JSON_PATH":        "/custom/servers.json",
-				"PGPASS_PATH":              "/custom/.pgpass",
-				"PGADMIN_URL":              "https://pgadmin.example.com",
-				"SERVER_GROUP_NAME":        "My Clusters",
-				"NAMESPACE":                "production",
+				"POLL_INTERVAL":     "1m",
+				"SERVERS_JSON_PATH": "/custom/servers.json",
+				"PGPASS_PATH":       "/custom/.pgpass",
+				"SERVER_GROUP_NAME": "My Clusters",
+				"NAMESPACE":         "production",
 			},
 			want: &Config{
 				PollInterval:    60 * time.Second,
 				ServersJSONPath: "/custom/servers.json",
 				PgpassPath:      "/custom/.pgpass",
-				PgAdminURL:      "https://pgadmin.example.com",
-				PgAdminEmail:    "custom@test.com",
-				PgAdminPassword: "secure",
 				ServerGroupName: "My Clusters",
 				Namespace:       "production",
 			},
 			wantErr: false,
 		},
 		{
-			name: "missing PGADMIN_DEFAULT_EMAIL",
-			env: map[string]string{
-				"PGADMIN_DEFAULT_PASSWORD": "password",
-			},
-			wantErr: true,
-		},
-		{
-			name: "missing PGADMIN_DEFAULT_PASSWORD",
-			env: map[string]string{
-				"PGADMIN_DEFAULT_EMAIL": "admin@example.com",
-			},
-			wantErr: true,
-		},
-		{
 			name: "invalid POLL_INTERVAL",
 			env: map[string]string{
-				"PGADMIN_DEFAULT_EMAIL":    "admin@example.com",
-				"PGADMIN_DEFAULT_PASSWORD": "password",
-				"POLL_INTERVAL":            "invalid",
+				"POLL_INTERVAL": "invalid",
 			},
 			wantErr: true,
 		},
@@ -86,7 +58,7 @@ func TestLoad(t *testing.T) {
 				t.Setenv(key, val)
 			}
 			// Clear unset vars
-			for _, key := range []string{"PGADMIN_DEFAULT_EMAIL", "PGADMIN_DEFAULT_PASSWORD", "POLL_INTERVAL", "SERVERS_JSON_PATH", "PGPASS_PATH", "PGADMIN_URL", "SERVER_GROUP_NAME", "NAMESPACE"} {
+			for _, key := range []string{"POLL_INTERVAL", "SERVERS_JSON_PATH", "PGPASS_PATH", "SERVER_GROUP_NAME", "NAMESPACE"} {
 				if _, ok := tt.env[key]; !ok {
 					t.Setenv(key, "")
 				}
@@ -109,15 +81,6 @@ func TestLoad(t *testing.T) {
 			}
 			if got.PgpassPath != tt.want.PgpassPath {
 				t.Errorf("PgpassPath = %q, want %q", got.PgpassPath, tt.want.PgpassPath)
-			}
-			if got.PgAdminURL != tt.want.PgAdminURL {
-				t.Errorf("PgAdminURL = %q, want %q", got.PgAdminURL, tt.want.PgAdminURL)
-			}
-			if got.PgAdminEmail != tt.want.PgAdminEmail {
-				t.Errorf("PgAdminEmail = %q, want %q", got.PgAdminEmail, tt.want.PgAdminEmail)
-			}
-			if got.PgAdminPassword != tt.want.PgAdminPassword {
-				t.Errorf("PgAdminPassword = %q, want %q", got.PgAdminPassword, tt.want.PgAdminPassword)
 			}
 			if got.ServerGroupName != tt.want.ServerGroupName {
 				t.Errorf("ServerGroupName = %q, want %q", got.ServerGroupName, tt.want.ServerGroupName)

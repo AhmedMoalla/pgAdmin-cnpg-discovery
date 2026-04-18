@@ -8,8 +8,8 @@ Kubernetes sidecar (Go) that runs alongside pgAdmin, discovers CloudNativePG clu
 - `cmd/` — Entry point, signal handling, log setup
 - `internal/config/` — Env var parsing into `Config` struct
 - `internal/discovery/` — K8s dynamic client for CNPG CRD listing + typed client for secret reads
-- `internal/pgadmin/` — `servers.json`/`.pgpass` generation and pgAdmin REST API client
-- `internal/reconciler/` — Periodic reconciliation loop: discover → write files → API sync
+- `internal/pgadmin/` — `servers.json`/`.pgpass` generation
+- `internal/reconciler/` — Periodic reconciliation loop: discover → write files
 - `kustomize/` — FluxCD-ready Kubernetes manifests
 
 The sidecar and pgAdmin share an `emptyDir` volume at `/shared` for `servers.json` and `.pgpass`.
@@ -34,7 +34,6 @@ go build ./...      # Compile check
 - **Managed server tagging:** Servers the sidecar creates carry comment `"Managed by cnpg-discovery"`. Never modify servers without this tag.
 - **Secret fallback:** Try `<cluster>-superuser` first, fall back to `<cluster>-app`.
 - **Deterministic ordering:** Sort clusters by `namespace/name` before assigning server IDs.
-- **pgAdmin API:** Best-effort — if unavailable, files are still written for startup. Auto re-auth on 401/403.
 - **Config:** All configuration via environment variables with sensible defaults. See `internal/config/config.go`.
 
 ## Project Details

@@ -56,9 +56,6 @@ func TestNew(t *testing.T) {
 		PollInterval:    30 * time.Second,
 		ServersJSONPath: "/tmp/servers.json",
 		PgpassPath:      "/tmp/.pgpass",
-		PgAdminURL:      "http://localhost",
-		PgAdminEmail:    "admin@example.com",
-		PgAdminPassword: "password",
 		ServerGroupName: "CNPG",
 		Namespace:       "",
 	}
@@ -83,22 +80,16 @@ func TestNew(t *testing.T) {
 	if rec.discoverer != disc {
 		t.Errorf("Discoverer not set correctly")
 	}
-	if rec.apiClient == nil {
-		t.Errorf("APIClient not created")
-	}
 }
 
 func TestReconcileOnce_Success(t *testing.T) {
 	t.Run("writes files on successful discovery", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		
+
 		cfg := &config.Config{
 			PollInterval:    30 * time.Second,
 			ServersJSONPath: tmpDir + "/servers.json",
 			PgpassPath:      tmpDir + "/.pgpass",
-			PgAdminURL:      "http://localhost",
-			PgAdminEmail:    "admin@example.com",
-			PgAdminPassword: "password",
 			ServerGroupName: "CNPG",
 			Namespace:       "",
 		}
@@ -160,14 +151,11 @@ func TestReconcileOnce_Success(t *testing.T) {
 func TestReconcileOnce_EmptyClusters(t *testing.T) {
 	t.Run("handles empty cluster list gracefully", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		
+
 		cfg := &config.Config{
 			PollInterval:    30 * time.Second,
 			ServersJSONPath: tmpDir + "/servers.json",
 			PgpassPath:      tmpDir + "/.pgpass",
-			PgAdminURL:      "http://localhost",
-			PgAdminEmail:    "admin@example.com",
-			PgAdminPassword: "password",
 			ServerGroupName: "CNPG",
 			Namespace:       "",
 		}
@@ -207,14 +195,11 @@ func TestReconcileOnce_EmptyClusters(t *testing.T) {
 func TestRun_CancellationHandling(t *testing.T) {
 	t.Run("stops on context cancellation", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		
+
 		cfg := &config.Config{
 			PollInterval:    1 * time.Millisecond, // Very short to ensure at least one reconcile
 			ServersJSONPath: tmpDir + "/servers.json",
 			PgpassPath:      tmpDir + "/.pgpass",
-			PgAdminURL:      "http://localhost",
-			PgAdminEmail:    "admin@example.com",
-			PgAdminPassword: "password",
 			ServerGroupName: "CNPG",
 			Namespace:       "",
 		}
@@ -263,7 +248,7 @@ func TestRun_CancellationHandling(t *testing.T) {
 
 		// Let it run briefly
 		time.Sleep(50 * time.Millisecond)
-		
+
 		// Cancel context
 		cancel()
 
@@ -283,14 +268,11 @@ func TestRun_CancellationHandling(t *testing.T) {
 func TestRunImmediate(t *testing.T) {
 	t.Run("runs reconciliation immediately on startup", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		
+
 		cfg := &config.Config{
 			PollInterval:    100 * time.Millisecond, // Long interval
 			ServersJSONPath: tmpDir + "/servers.json",
 			PgpassPath:      tmpDir + "/.pgpass",
-			PgAdminURL:      "http://localhost",
-			PgAdminEmail:    "admin@example.com",
-			PgAdminPassword: "password",
 			ServerGroupName: "CNPG",
 			Namespace:       "",
 		}
@@ -350,7 +332,7 @@ func TestRunImmediate(t *testing.T) {
 func TestWriteFiles_EmptyClusters(t *testing.T) {
 	t.Run("writes empty servers.json and .pgpass for no clusters", func(t *testing.T) {
 		tmpDir := t.TempDir()
-		
+
 		cfg := &config.Config{
 			ServersJSONPath: tmpDir + "/servers.json",
 			PgpassPath:      tmpDir + "/.pgpass",
