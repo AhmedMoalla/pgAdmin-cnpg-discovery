@@ -116,6 +116,7 @@ func TestReconcileOnce_Success(t *testing.T) {
 					"username": []byte("postgres"),
 					"password": []byte("password"),
 					"dbname":   []byte("postgres"),
+					"pgpass":   []byte("localhost:5432:postgres:postgres:password"),
 				},
 			},
 		}
@@ -226,6 +227,7 @@ func TestRun_CancellationHandling(t *testing.T) {
 					"username": []byte("user"),
 					"password": []byte("pass"),
 					"dbname":   []byte("db"),
+					"pgpass":   []byte("localhost:5432:db:user:pass"),
 				},
 			},
 		}
@@ -299,6 +301,7 @@ func TestRunImmediate(t *testing.T) {
 					"username": []byte("user"),
 					"password": []byte("pass"),
 					"dbname":   []byte("db"),
+					"pgpass":   []byte("localhost:5432:db:user:pass"),
 				},
 			},
 		}
@@ -409,6 +412,7 @@ func TestReconcile_UnchangedConfigurationSkipsRewrite(t *testing.T) {
 					"username": []byte("postgres"),
 					"password": []byte("password"),
 					"dbname":   []byte("postgres"),
+					"pgpass":   []byte("localhost:5432:postgres:postgres:password"),
 				},
 			},
 		}
@@ -495,6 +499,7 @@ func TestReconcile_RestartsPodOnConfigChange(t *testing.T) {
 					"username": []byte("postgres"),
 					"password": []byte("password"),
 					"dbname":   []byte("postgres"),
+					"pgpass":   []byte("localhost:5432:postgres:postgres:password"),
 				},
 			},
 			{
@@ -508,6 +513,7 @@ func TestReconcile_RestartsPodOnConfigChange(t *testing.T) {
 					"username": []byte("postgres"),
 					"password": []byte("password"),
 					"dbname":   []byte("postgres"),
+					"pgpass":   []byte("host-b:5432:postgres:postgres:password"),
 				},
 			},
 		}
@@ -585,6 +591,7 @@ func TestReconcile_RestartsPodOnConfigChange(t *testing.T) {
 					"username": []byte("postgres"),
 					"password": []byte("password"),
 					"dbname":   []byte("postgres"),
+					"pgpass":   []byte("localhost:5432:postgres:postgres:password"),
 				},
 			},
 		}

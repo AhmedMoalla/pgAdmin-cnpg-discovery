@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -108,9 +109,10 @@ func (d *Discoverer) readClusterSecret(ctx context.Context, clusterName, namespa
 			Username:  string(secret.Data["username"]),
 			Password:  string(secret.Data["password"]),
 			Database:  string(secret.Data["dbname"]),
+			Pgpass:    strings.TrimSpace(string(secret.Data["pgpass"])),
 		}
 
-		if info.Host == "" || info.Username == "" {
+		if info.Host == "" || info.Username == "" || info.Pgpass == "" {
 			slog.Warn("secret missing required fields", "secret", secretName, "namespace", namespace)
 			continue
 		}

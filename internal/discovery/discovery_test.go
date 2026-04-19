@@ -47,6 +47,7 @@ func TestDiscoverer_DiscoverClusters(t *testing.T) {
 						"username": []byte("postgres"),
 						"password": []byte("secretpass"),
 						"dbname":   []byte("postgres"),
+						"pgpass":   []byte("postgres.example.com:5432:postgres:postgres:secretpass"),
 					},
 				},
 			},
@@ -72,6 +73,7 @@ func TestDiscoverer_DiscoverClusters(t *testing.T) {
 						"username": []byte("app_user"),
 						"password": []byte("apppass"),
 						"dbname":   []byte("appdb"),
+						"pgpass":   []byte("db.internal:5432:appdb:app_user:apppass"),
 					},
 				},
 			},
@@ -98,6 +100,7 @@ func TestDiscoverer_DiscoverClusters(t *testing.T) {
 						"username": []byte("user1"),
 						"password": []byte("pass1"),
 						"dbname":   []byte("db1"),
+						"pgpass":   []byte("db1.local:5432:db1:user1:pass1"),
 					},
 				},
 				&v1.Secret{
@@ -111,6 +114,7 @@ func TestDiscoverer_DiscoverClusters(t *testing.T) {
 						"username": []byte("user2"),
 						"password": []byte("pass2"),
 						"dbname":   []byte("db2"),
+						"pgpass":   []byte("db2.local:5432:db2:user2:pass2"),
 					},
 				},
 			},
@@ -136,6 +140,7 @@ func TestDiscoverer_DiscoverClusters(t *testing.T) {
 						"username": []byte("user1"),
 						"password": []byte("pass1"),
 						"dbname":   []byte("db1"),
+						"pgpass":   []byte("db1.local:5432:db1:user1:pass1"),
 					},
 				},
 			},
@@ -164,9 +169,8 @@ func TestDiscoverer_DiscoverClusters(t *testing.T) {
 						Namespace: "default",
 					},
 					Data: map[string][]byte{
-						// Missing 'username' and 'host'
-						"password": []byte("pass"),
-						"dbname":   []byte("db"),
+						// Missing one or more required fields ('host', 'username', 'pgpass')
+						"dbname": []byte("db"),
 					},
 				},
 			},
@@ -231,6 +235,7 @@ func TestDiscoverer_DefaultPorts(t *testing.T) {
 					"username": []byte("user"),
 					"password": []byte("pass"),
 					"dbname":   []byte("db"),
+					"pgpass":   []byte("localhost:5432:db:user:pass"),
 				},
 			},
 		}
@@ -275,6 +280,7 @@ func TestDiscoverer_DefaultPorts(t *testing.T) {
 					"username": []byte("user"),
 					"password": []byte("pass"),
 					"dbname":   []byte(""), // Empty dbname
+					"pgpass":   []byte("localhost:5432:postgres:user:pass"),
 				},
 			},
 		}

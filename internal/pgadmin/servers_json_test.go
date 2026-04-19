@@ -132,6 +132,9 @@ func TestGenerateServersJSON(t *testing.T) {
 				if server.Username != "postgres" {
 					t.Errorf("Username = %q, want %q", server.Username, "postgres")
 				}
+				if server.PassFile != pgpassPath {
+					t.Errorf("PassFile = %q, want %q", server.PassFile, pgpassPath)
+				}
 				if server.SSLMode != "prefer" {
 					t.Errorf("SSLMode = %q, want %q", server.SSLMode, "prefer")
 				}

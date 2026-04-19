@@ -9,6 +9,7 @@ type ClusterInfo struct {
 	Username  string
 	Password  string
 	Database  string
+	Pgpass    string
 }
 
 // ServerKey returns a unique identifier for this cluster entry.

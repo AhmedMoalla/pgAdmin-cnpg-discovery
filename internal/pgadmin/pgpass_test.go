@@ -24,11 +24,7 @@ func TestGeneratePgpass(t *testing.T) {
 				{
 					Name:      "test-cluster",
 					Namespace: "default",
-					Host:      "localhost",
-					Port:      "5432",
-					Username:  "postgres",
-					Password:  "password",
-					Database:  "postgres",
+					Pgpass:    "localhost:5432:postgres:postgres:password",
 				},
 			},
 			want: "localhost:5432:postgres:postgres:password\n",
@@ -39,38 +35,37 @@ func TestGeneratePgpass(t *testing.T) {
 				{
 					Name:      "z-cluster",
 					Namespace: "b-ns",
-					Host:      "z-host",
-					Port:      "5432",
-					Username:  "z-user",
-					Password:  "z-pass",
-					Database:  "z-db",
+					Pgpass:    "z-host:5432:z-db:z-user:z-pass",
 				},
 				{
 					Name:      "a-cluster",
 					Namespace: "a-ns",
-					Host:      "a-host",
-					Port:      "5432",
-					Username:  "a-user",
-					Password:  "a-pass",
-					Database:  "a-db",
+					Pgpass:    "a-host:5432:a-db:a-user:a-pass",
 				},
 			},
 			want: "a-host:5432:a-db:a-user:a-pass\nz-host:5432:z-db:z-user:z-pass\n",
 		},
 		{
-			name: "special characters escaped",
+			name: "retains special characters from secret pgpass",
 			clusters: []discovery.ClusterInfo{
 				{
 					Name:      "test",
 					Namespace: "default",
-					Host:      "host:with:colons",
-					Port:      "5432",
-					Username:  "user\\with\\backslashes",
-					Password:  "pass:with:colons:and\\backslashes",
-					Database:  "db",
+					Pgpass:    "host\\:with\\:colons:5432:db:user\\\\with\\\\backslashes:pass\\:with\\:colons\\:and\\\\backslashes",
 				},
 			},
 			want: "host\\:with\\:colons:5432:db:user\\\\with\\\\backslashes:pass\\:with\\:colons\\:and\\\\backslashes\n",
+		},
+		{
+			name: "trims surrounding whitespace and ensures single newline",
+			clusters: []discovery.ClusterInfo{
+				{
+					Name:      "test",
+					Namespace: "default",
+					Pgpass:    "  localhost:5432:postgres:postgres:password\n\t",
+				},
+			},
+			want: "localhost:5432:postgres:postgres:password\n",
 		},
 	}
 
@@ -79,59 +74,6 @@ func TestGeneratePgpass(t *testing.T) {
 			got := GeneratePgpass(tt.clusters)
 			if got != tt.want {
 				t.Errorf("GeneratePgpass() = %q, want %q", got, tt.want)
-			}
-		})
-	}
-}
-
-func TestEscapePgpass(t *testing.T) {
-	tests := []struct {
-		name string
-		s    string
-		want string
-	}{
-		{
-			name: "no special chars",
-			s:    "plain_text",
-			want: "plain_text",
-		},
-		{
-			name: "single colon",
-			s:    "host:name",
-			want: "host\\:name",
-		},
-		{
-			name: "single backslash",
-			s:    "path\\to\\file",
-			want: "path\\\\to\\\\file",
-		},
-		{
-			name: "both colon and backslash",
-			s:    "back\\slash:colon",
-			want: "back\\\\slash\\:colon",
-		},
-		{
-			name: "multiple colons",
-			s:    "host:port:db",
-			want: "host\\:port\\:db",
-		},
-		{
-			name: "multiple backslashes",
-			s:    "path\\\\double",
-			want: "path\\\\\\\\double",
-		},
-		{
-			name: "empty string",
-			s:    "",
-			want: "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := escapePgpass(tt.s)
-			if got != tt.want {
-				t.Errorf("escapePgpass(%q) = %q, want %q", tt.s, got, tt.want)
 			}
 		})
 	}
@@ -146,11 +88,7 @@ func TestWritePgpass(t *testing.T) {
 			{
 				Name:      "test",
 				Namespace: "default",
-				Host:      "localhost",
-				Port:      "5432",
-				Username:  "postgres",
-				Password:  "password",
-				Database:  "postgres",
+				Pgpass:    "localhost:5432:postgres:postgres:password",
 			},
 		}
 
@@ -190,11 +128,7 @@ func TestWritePgpass(t *testing.T) {
 			{
 				Name:      "test",
 				Namespace: "default",
-				Host:      "localhost",
-				Port:      "5432",
-				Username:  "user",
-				Password:  "pass",
-				Database:  "db",
+				Pgpass:    "localhost:5432:db:user:pass",
 			},
 		}
 
@@ -223,11 +157,7 @@ func TestWritePgpass(t *testing.T) {
 			{
 				Name:      "new",
 				Namespace: "default",
-				Host:      "newhost",
-				Port:      "5433",
-				Username:  "newuser",
-				Password:  "newpass",
-				Database:  "newdb",
+				Pgpass:    "newhost:5433:newdb:newuser:newpass",
 			},
 		}
 
