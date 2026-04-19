@@ -381,3 +381,30 @@ func TestWriteServersJSON(t *testing.T) {
 		}
 	})
 }
+
+func TestAtomicWrite_MkdirAllError(t *testing.T) {
+	// /dev/null is a character device, so MkdirAll of /dev/null (as dir) fails.
+	path := "/dev/null/servers.json"
+	clusters := []discovery.ClusterInfo{}
+
+	err := WriteServersJSON(path, clusters, "test", "")
+	if err == nil {
+		t.Errorf("WriteServersJSON() expected error for unwritable path, got nil")
+	}
+}
+
+func TestAtomicWrite_RenameError(t *testing.T) {
+	tmpDir := t.TempDir()
+	path := tmpDir + "/target.json"
+
+	// Pre-create a directory at the target path so that the rename fails (EISDIR).
+	if err := os.Mkdir(path, 0755); err != nil {
+		t.Fatalf("Mkdir failed: %v", err)
+	}
+
+	clusters := []discovery.ClusterInfo{}
+	err := WriteServersJSON(path, clusters, "test", "")
+	if err == nil {
+		t.Errorf("WriteServersJSON() expected error when target is a directory, got nil")
+	}
+}

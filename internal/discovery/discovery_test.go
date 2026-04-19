@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	v1 "k8s.io/api/core/v1"
@@ -11,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	fakeClientset "k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 )
 
 func TestDiscoverer_DiscoverClusters(t *testing.T) {
@@ -318,6 +320,40 @@ func createFakeCNPGCluster(name, namespace string) *unstructured.Unstructured {
 			},
 			"spec": map[string]interface{}{},
 		},
+	}
+}
+
+func TestDiscoverer_Clientset(t *testing.T) {
+	scheme := runtime.NewScheme()
+	dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, nil)
+	clientsetFake := fakeClientset.NewSimpleClientset()
+
+	d := NewFromClients(dynFake, clientsetFake, "")
+
+	if got := d.Clientset(); got != clientsetFake {
+		t.Errorf("Clientset() = %v, want %v", got, clientsetFake)
+	}
+}
+
+func TestDiscoverer_DiscoverClusters_ListError(t *testing.T) {
+	scheme := runtime.NewScheme()
+	scheme.AddKnownTypeWithName(
+		schema.GroupVersionKind{Group: "postgresql.cnpg.io", Version: "v1", Kind: "ClusterList"},
+		&unstructured.UnstructuredList{},
+	)
+	dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
+		cnpgClusterGVR: "ClusterList",
+	})
+	dynFake.Fake.PrependReactor("list", "clusters", func(action ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, fmt.Errorf("simulated list failure")
+	})
+	clientsetFake := fakeClientset.NewSimpleClientset()
+
+	disc := NewFromClients(dynFake, clientsetFake, "")
+	_, err := disc.DiscoverClusters(context.Background())
+
+	if err == nil {
+		t.Errorf("DiscoverClusters() expected error, got nil")
 	}
 }
 

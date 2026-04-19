@@ -3,6 +3,7 @@ package reconciler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic/fake"
 	fakeClientset "k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 
 	"github.com/AhmedMoalla/pgadmin-cnpg-discovery/internal/config"
 	"github.com/AhmedMoalla/pgadmin-cnpg-discovery/internal/discovery"
@@ -621,5 +623,123 @@ func TestReconcile_RestartsPodOnConfigChange(t *testing.T) {
 		if err != nil {
 			t.Errorf("pod should not be deleted when POD_NAME is not configured: %v", err)
 		}
+	})
+}
+
+func newFakeDynClientWithListError(t *testing.T) *fake.FakeDynamicClient {
+	t.Helper()
+	scheme := runtime.NewScheme()
+	scheme.AddKnownTypeWithName(
+		schema.GroupVersionKind{Group: "postgresql.cnpg.io", Version: "v1", Kind: "ClusterList"},
+		&unstructured.UnstructuredList{},
+	)
+	dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, map[schema.GroupVersionResource]string{
+		{Group: "postgresql.cnpg.io", Version: "v1", Resource: "clusters"}: "ClusterList",
+	})
+	dynFake.Fake.PrependReactor("list", "clusters", func(action ktesting.Action) (bool, runtime.Object, error) {
+		return true, nil, fmt.Errorf("simulated list failure")
+	})
+	return dynFake
+}
+
+func TestReconcileOnce_DiscoverError(t *testing.T) {
+	t.Run("returns error when discovery fails", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			ServersJSONPath: tmpDir + "/servers.json",
+			PgpassPath:      tmpDir + "/.pgpass",
+			ServerGroupName: "CNPG",
+		}
+
+		disc := discovery.NewFromClients(newFakeDynClientWithListError(t), fakeClientset.NewSimpleClientset(), "")
+		rec := New(cfg, disc)
+
+		err := rec.ReconcileOnce(context.Background())
+		if err == nil {
+			t.Errorf("ReconcileOnce() expected error, got nil")
+		}
+	})
+}
+
+func TestWriteFiles_Error(t *testing.T) {
+	t.Run("returns false when servers.json write fails", func(t *testing.T) {
+		cfg := &config.Config{
+			ServersJSONPath: "/dev/null/servers.json",
+			PgpassPath:      "/dev/null/.pgpass",
+			ServerGroupName: "CNPG",
+		}
+
+		scheme := runtime.NewScheme()
+		dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, nil)
+		disc := discovery.NewFromClients(dynFake, fakeClientset.NewSimpleClientset(), "")
+		rec := New(cfg, disc)
+
+		if result := rec.writeFiles([]discovery.ClusterInfo{}); result {
+			t.Errorf("writeFiles() = true, want false when WriteServersJSON fails")
+		}
+	})
+
+	t.Run("returns false when pgpass write fails", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			ServersJSONPath: tmpDir + "/servers.json",
+			PgpassPath:      "/dev/null/.pgpass",
+			ServerGroupName: "CNPG",
+		}
+
+		scheme := runtime.NewScheme()
+		dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, nil)
+		disc := discovery.NewFromClients(dynFake, fakeClientset.NewSimpleClientset(), "")
+		rec := New(cfg, disc)
+
+		if result := rec.writeFiles([]discovery.ClusterInfo{}); result {
+			t.Errorf("writeFiles() = true, want false when WritePgpass fails")
+		}
+	})
+}
+
+func TestReconcile_DiscoverError(t *testing.T) {
+	t.Run("logs error and does not write files when discovery fails", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		cfg := &config.Config{
+			PollInterval:    30 * time.Second,
+			ServersJSONPath: tmpDir + "/servers.json",
+			PgpassPath:      tmpDir + "/.pgpass",
+			ServerGroupName: "CNPG",
+		}
+
+		disc := discovery.NewFromClients(newFakeDynClientWithListError(t), fakeClientset.NewSimpleClientset(), "")
+		rec := New(cfg, disc)
+
+		rec.reconcile(context.Background())
+
+		// Files must not be created because discovery failed before write.
+		if _, err := os.Stat(cfg.ServersJSONPath); err == nil {
+			t.Errorf("servers.json should not be created when discovery fails")
+		}
+		if _, err := os.Stat(cfg.PgpassPath); err == nil {
+			t.Errorf(".pgpass should not be created when discovery fails")
+		}
+	})
+}
+
+func TestRestartPod_DeleteError(t *testing.T) {
+	t.Run("logs error when pod deletion fails", func(t *testing.T) {
+		cfg := &config.Config{
+			PodName:      "nonexistent-pod",
+			PodNamespace: "default",
+		}
+
+		scheme := runtime.NewScheme()
+		dynFake := fake.NewSimpleDynamicClientWithCustomListKinds(scheme, nil)
+		// Clientset has no pods, so Delete will return a not-found error.
+		disc := discovery.NewFromClients(dynFake, fakeClientset.NewSimpleClientset(), "")
+		rec := New(cfg, disc)
+
+		// Must not panic even when the pod does not exist.
+		rec.restartPod(context.Background())
 	})
 }
