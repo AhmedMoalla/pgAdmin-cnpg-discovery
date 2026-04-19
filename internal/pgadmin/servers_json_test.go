@@ -132,17 +132,11 @@ func TestGenerateServersJSON(t *testing.T) {
 				if server.Username != "postgres" {
 					t.Errorf("Username = %q, want %q", server.Username, "postgres")
 				}
-				if server.PassFile != pgpassPath {
-					t.Errorf("PassFile = %q, want %q", server.PassFile, pgpassPath)
-				}
-				if server.SSLMode != "prefer" {
-					t.Errorf("SSLMode = %q, want %q", server.SSLMode, "prefer")
-				}
 				if got, ok := server.ConnectionParameters["sslmode"].(string); !ok || got != "prefer" {
 					t.Errorf("ConnectionParameters[sslmode] = %v, want %q", server.ConnectionParameters["sslmode"], "prefer")
 				}
-				if got, ok := server.ConnectionParameters["passfile"].(string); !ok || got != pgpassPath {
-					t.Errorf("ConnectionParameters[passfile] = %v, want %q", server.ConnectionParameters["passfile"], pgpassPath)
+				if got, ok := server.ConnectionParameters["passfile"].(string); !ok || got != "/.pgpass" {
+					t.Errorf("ConnectionParameters[passfile] = %v, want %q", server.ConnectionParameters["passfile"], "/.pgpass")
 				}
 				if got, ok := server.ConnectionParameters["connect_timeout"].(float64); !ok || got != 10 {
 					t.Errorf("ConnectionParameters[connect_timeout] = %v, want %d", server.ConnectionParameters["connect_timeout"], 10)
@@ -219,6 +213,47 @@ func TestGenerateServersJSON(t *testing.T) {
 
 			tt.validate(&s)
 		})
+	}
+}
+
+func TestGenerateServersJSON_OmitsLegacyTopLevelFields(t *testing.T) {
+	clusters := []discovery.ClusterInfo{
+		{
+			Name:      "test-cluster",
+			Namespace: "default",
+			Host:      "localhost",
+			Port:      "5432",
+			Username:  "postgres",
+			Database:  "postgres",
+		},
+	}
+
+	sorted := SortClusters(clusters)
+	got, err := GenerateServersJSON(sorted, "CNPG Clusters", "/shared/.pgpass")
+	if err != nil {
+		t.Fatalf("GenerateServersJSON() error = %v", err)
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(got, &payload); err != nil {
+		t.Fatalf("json.Unmarshal() error = %v", err)
+	}
+
+	servers, ok := payload["Servers"].(map[string]any)
+	if !ok {
+		t.Fatalf("Servers missing or invalid type: %T", payload["Servers"])
+	}
+
+	server, ok := servers["1"].(map[string]any)
+	if !ok {
+		t.Fatalf("Servers[1] missing or invalid type: %T", servers["1"])
+	}
+
+	if _, exists := server["PassFile"]; exists {
+		t.Errorf("legacy field PassFile should be omitted")
+	}
+	if _, exists := server["SSLMode"]; exists {
+		t.Errorf("legacy field SSLMode should be omitted")
 	}
 }
 

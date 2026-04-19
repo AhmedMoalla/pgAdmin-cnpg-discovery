@@ -19,8 +19,6 @@ type ServerEntry struct {
 	Port                 int            `json:"Port"`
 	MaintenanceDB        string         `json:"MaintenanceDB"`
 	Username             string         `json:"Username"`
-	PassFile             string         `json:"PassFile,omitempty"`
-	SSLMode              string         `json:"SSLMode"`
 	Comment              string         `json:"Comment,omitempty"`
 	ConnectionParameters map[string]any `json:"ConnectionParameters,omitempty"`
 }
@@ -31,9 +29,10 @@ type ServersJSON struct {
 }
 
 const managedComment = "Managed by cnpg-discovery"
+const pgAdminConnectionPassfile = "/.pgpass"
 
 // GenerateServersJSON creates the servers.json content from discovered clusters.
-func GenerateServersJSON(clusters []ClusterInfoSorted, groupName, pgpassPath string) ([]byte, error) {
+func GenerateServersJSON(clusters []ClusterInfoSorted, groupName, _ string) ([]byte, error) {
 	servers := ServersJSON{
 		Servers: make(map[string]ServerEntry),
 	}
@@ -52,13 +51,11 @@ func GenerateServersJSON(clusters []ClusterInfoSorted, groupName, pgpassPath str
 			Port:          port,
 			MaintenanceDB: c.Database,
 			Username:      c.Username,
-			PassFile:      pgpassPath,
-			SSLMode:       "prefer",
 			Comment:       managedComment,
 			ConnectionParameters: map[string]any{
 				"sslmode":         "prefer",
 				"connect_timeout": 10,
-				"passfile":        pgpassPath,
+				"passfile":        pgAdminConnectionPassfile,
 			},
 		}
 	}
