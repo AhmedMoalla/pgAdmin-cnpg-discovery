@@ -67,6 +67,22 @@ func TestGeneratePgpass(t *testing.T) {
 			},
 			want: "localhost:5432:postgres:postgres:password\n",
 		},
+		{
+			name: "skips clusters with empty pgpass",
+			clusters: []discovery.ClusterInfo{
+				{
+					Name:      "has-pgpass",
+					Namespace: "default",
+					Pgpass:    "localhost:5432:db:user:pass",
+				},
+				{
+					Name:      "no-pgpass",
+					Namespace: "default",
+					Pgpass:    "",
+				},
+			},
+			want: "localhost:5432:db:user:pass\n",
+		},
 	}
 
 	for _, tt := range tests {
