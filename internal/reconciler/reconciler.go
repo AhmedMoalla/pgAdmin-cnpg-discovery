@@ -91,7 +91,7 @@ func (r *Reconciler) reconcile(ctx context.Context) {
 func (r *Reconciler) writeFiles(clusters []discovery.ClusterInfo) bool {
 	success := true
 
-	if err := pgadmin.WriteServersJSON(r.cfg.ServersJSONPath, clusters, r.cfg.ServerGroupName); err != nil {
+	if err := pgadmin.WriteServersJSON(r.cfg.ServersJSONPath, clusters, r.cfg.ServerGroupName, r.cfg.PgpassPath); err != nil {
 		slog.Error("failed to write servers.json", "path", r.cfg.ServersJSONPath, "error", err)
 		success = false
 	} else {

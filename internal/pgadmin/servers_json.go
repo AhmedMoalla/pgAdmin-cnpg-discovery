@@ -13,15 +13,15 @@ import (
 
 // ServerEntry represents a single server in pgAdmin's servers.json format.
 type ServerEntry struct {
-	Name                 string            `json:"Name"`
-	Group                string            `json:"Group"`
-	Host                 string            `json:"Host"`
-	Port                 int               `json:"Port"`
-	MaintenanceDB        string            `json:"MaintenanceDB"`
-	Username             string            `json:"Username"`
-	SSLMode              string            `json:"SSLMode"`
-	Comment              string            `json:"Comment,omitempty"`
-	ConnectionParameters map[string]string `json:"ConnectionParameters,omitempty"`
+	Name                 string         `json:"Name"`
+	Group                string         `json:"Group"`
+	Host                 string         `json:"Host"`
+	Port                 int            `json:"Port"`
+	MaintenanceDB        string         `json:"MaintenanceDB"`
+	Username             string         `json:"Username"`
+	SSLMode              string         `json:"SSLMode"`
+	Comment              string         `json:"Comment,omitempty"`
+	ConnectionParameters map[string]any `json:"ConnectionParameters,omitempty"`
 }
 
 // ServersJSON is the top-level structure of pgAdmin's servers.json file.
@@ -32,7 +32,7 @@ type ServersJSON struct {
 const managedComment = "Managed by cnpg-discovery"
 
 // GenerateServersJSON creates the servers.json content from discovered clusters.
-func GenerateServersJSON(clusters []ClusterInfoSorted, groupName string) ([]byte, error) {
+func GenerateServersJSON(clusters []ClusterInfoSorted, groupName, pgpassPath string) ([]byte, error) {
 	servers := ServersJSON{
 		Servers: make(map[string]ServerEntry),
 	}
@@ -53,9 +53,10 @@ func GenerateServersJSON(clusters []ClusterInfoSorted, groupName string) ([]byte
 			Username:      c.Username,
 			SSLMode:       "prefer",
 			Comment:       managedComment,
-			ConnectionParameters: map[string]string{
+			ConnectionParameters: map[string]any{
 				"sslmode":         "prefer",
-				"connect_timeout": "10",
+				"connect_timeout": 10,
+				"passfile":        pgpassPath,
 			},
 		}
 	}
@@ -77,9 +78,9 @@ func SortClusters(clusters []discovery.ClusterInfo) []ClusterInfoSorted {
 }
 
 // WriteServersJSON writes the servers.json file atomically.
-func WriteServersJSON(path string, clusters []discovery.ClusterInfo, groupName string) error {
+func WriteServersJSON(path string, clusters []discovery.ClusterInfo, groupName, pgpassPath string) error {
 	sorted := SortClusters(clusters)
-	data, err := GenerateServersJSON(sorted, groupName)
+	data, err := GenerateServersJSON(sorted, groupName, pgpassPath)
 	if err != nil {
 		return fmt.Errorf("generating servers.json: %w", err)
 	}

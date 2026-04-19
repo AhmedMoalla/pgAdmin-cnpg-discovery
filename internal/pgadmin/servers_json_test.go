@@ -10,16 +10,16 @@ import (
 
 func TestSortClusters(t *testing.T) {
 	tests := []struct {
-		name             string
-		input            []discovery.ClusterInfo
-		wantFirstKey     string
-		wantLastKey      string
-		wantLen          int
+		name         string
+		input        []discovery.ClusterInfo
+		wantFirstKey string
+		wantLastKey  string
+		wantLen      int
 	}{
 		{
-			name:        "empty list",
-			input:       []discovery.ClusterInfo{},
-			wantLen:     0,
+			name:    "empty list",
+			input:   []discovery.ClusterInfo{},
+			wantLen: 0,
 		},
 		{
 			name: "already sorted",
@@ -57,11 +57,11 @@ func TestSortClusters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := SortClusters(tt.input)
-			
+
 			if len(got) != tt.wantLen {
 				t.Errorf("SortClusters() len = %d, want %d", len(got), tt.wantLen)
 			}
-			
+
 			if tt.wantLen > 0 {
 				if got[0].ServerKey() != tt.wantFirstKey {
 					t.Errorf("first key = %q, want %q", got[0].ServerKey(), tt.wantFirstKey)
@@ -75,6 +75,8 @@ func TestSortClusters(t *testing.T) {
 }
 
 func TestGenerateServersJSON(t *testing.T) {
+	const pgpassPath = "/shared/.pgpass"
+
 	tests := []struct {
 		name      string
 		clusters  []discovery.ClusterInfo
@@ -132,6 +134,15 @@ func TestGenerateServersJSON(t *testing.T) {
 				}
 				if server.SSLMode != "prefer" {
 					t.Errorf("SSLMode = %q, want %q", server.SSLMode, "prefer")
+				}
+				if got, ok := server.ConnectionParameters["sslmode"].(string); !ok || got != "prefer" {
+					t.Errorf("ConnectionParameters[sslmode] = %v, want %q", server.ConnectionParameters["sslmode"], "prefer")
+				}
+				if got, ok := server.ConnectionParameters["passfile"].(string); !ok || got != pgpassPath {
+					t.Errorf("ConnectionParameters[passfile] = %v, want %q", server.ConnectionParameters["passfile"], pgpassPath)
+				}
+				if got, ok := server.ConnectionParameters["connect_timeout"].(float64); !ok || got != 10 {
+					t.Errorf("ConnectionParameters[connect_timeout] = %v, want %d", server.ConnectionParameters["connect_timeout"], 10)
 				}
 				if server.Comment != "Managed by cnpg-discovery" {
 					t.Errorf("Comment = %q, want %q", server.Comment, "Managed by cnpg-discovery")
@@ -192,7 +203,7 @@ func TestGenerateServersJSON(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sorted := SortClusters(tt.clusters)
-			got, err := GenerateServersJSON(sorted, tt.groupName)
+			got, err := GenerateServersJSON(sorted, tt.groupName, pgpassPath)
 			if err != nil {
 				t.Fatalf("GenerateServersJSON() error = %v", err)
 			}
@@ -209,6 +220,8 @@ func TestGenerateServersJSON(t *testing.T) {
 }
 
 func TestWriteServersJSON(t *testing.T) {
+	const pgpassPath = "/shared/.pgpass"
+
 	t.Run("writes file with 0644 permissions", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		path := tmpDir + "/servers.json"
@@ -225,7 +238,7 @@ func TestWriteServersJSON(t *testing.T) {
 			},
 		}
 
-		err := WriteServersJSON(path, clusters, "CNPG Clusters")
+		err := WriteServersJSON(path, clusters, "CNPG Clusters", pgpassPath)
 		if err != nil {
 			t.Fatalf("WriteServersJSON() error = %v", err)
 		}
@@ -274,7 +287,7 @@ func TestWriteServersJSON(t *testing.T) {
 			},
 		}
 
-		err := WriteServersJSON(path, clusters, "CNPG Clusters")
+		err := WriteServersJSON(path, clusters, "CNPG Clusters", pgpassPath)
 		if err != nil {
 			t.Fatalf("WriteServersJSON() error = %v", err)
 		}
@@ -305,7 +318,7 @@ func TestWriteServersJSON(t *testing.T) {
 			},
 		}
 
-		err = WriteServersJSON(path, clusters, "CNPG Clusters")
+		err = WriteServersJSON(path, clusters, "CNPG Clusters", pgpassPath)
 		if err != nil {
 			t.Fatalf("WriteServersJSON() error = %v", err)
 		}
